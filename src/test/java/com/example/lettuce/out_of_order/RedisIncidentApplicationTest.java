@@ -30,9 +30,6 @@ import java.util.stream.IntStream;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
-@DirtiesContext
-
-@ActiveProfiles("local-test")
 class RedisIncidentApplicationTest {
 
     private static final Logger log = LoggerFactory.getLogger(RedisIncidentApplicationTest.class);
@@ -101,8 +98,8 @@ class RedisIncidentApplicationTest {
     void noErrorWhenNoSharedConnection() throws InterruptedException {
         Runnable task = () -> IntStream.range(0, 100).forEach(i -> {
             String id = String.valueOf(i);
-            saveSession(reactiveStringRedisTemplateNoShareConnection, id);
-            getSession(reactiveStringRedisTemplateNoShareConnection, id).doOnNext(result -> {
+            saveSession(reactiveStringRedisTemplate, id);
+            getSession(reactiveStringRedisTemplate, id).doOnNext(result -> {
                 if (!id.equals(result)) {
                     log.error("Result mismatch!!! Expected {} but got {}", id, result);
                 }
