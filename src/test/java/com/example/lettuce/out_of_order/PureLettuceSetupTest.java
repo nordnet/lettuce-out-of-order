@@ -13,6 +13,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.security.SecureRandom;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -39,9 +40,6 @@ public class PureLettuceSetupTest {
                 RedisClient redisClient = RedisClient.create(RedisURI.create(redis.getHost(), redis.getFirstMappedPort()));
                 StatefulRedisConnection<String, String> connection = redisClient.connect()) {
 
-
-            //
-
             AtomicInteger failures = new AtomicInteger(0);
 
             Runnable task = () -> IntStream.range(0, 100).forEach(i -> {
@@ -57,9 +55,40 @@ public class PureLettuceSetupTest {
 
             assertEquals(0, failures.get());
         }
+    }
 
+    @Test
+    void errorSimulationSynchronousStart() throws InterruptedException {
 
+        CountDownLatch synchronousStartLatch = new CountDownLatch(1);
+        //CountDownLatch awaitFailureLatch = new CountDownLatch(1);
 
+        try (
+                ExecutorService executorService = Executors.newFixedThreadPool(8);
+                RedisClient redisClient = RedisClient.create(RedisURI.create(redis.getHost(), redis.getFirstMappedPort()));
+                StatefulRedisConnection<String, String> connection = redisClient.connect()) {
+
+            AtomicInteger failures = new AtomicInteger(0);
+
+            Runnable task = () -> IntStream.range(0, 100).forEach(i -> {
+                try {
+                    synchronousStartLatch.await();
+                } catch (InterruptedException e) {
+                }
+                String id = String.valueOf(i);
+                setAndThrowErrorSometimes(connection, id);
+                getAndVerify(connection, id, failures);
+            });
+
+            IntStream.range(0, 100).forEach(i -> executorService.submit(task));
+
+            synchronousStartLatch.countDown();
+
+            executorService.shutdown();
+            executorService.awaitTermination(1, TimeUnit.MINUTES);
+
+            assertEquals(0, failures.get());
+        }
     }
 
     private void getAndVerify(StatefulRedisConnection<String, String> connection, String id, AtomicInteger failures) {
@@ -75,7 +104,7 @@ public class PureLettuceSetupTest {
     private void setAndThrowErrorSometimes(StatefulRedisConnection<String, String> connection, String id) {
         connection.reactive()
                 .set(id, id)
-                .doOnNext(result -> {
+                .doOnNext(_ -> {
                     if (new SecureRandom().nextBoolean()) {
                         throw new OutOfMemoryError("pubsub error");
                     }
