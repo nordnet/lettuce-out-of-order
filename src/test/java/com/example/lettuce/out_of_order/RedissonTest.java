@@ -38,7 +38,7 @@ class RedissonTest {
         config.useSingleServer().setAddress("redis://" + redis.getHost() + ":" + redis.getFirstMappedPort());
 
         RedissonClient redissonClient = Redisson.create(config);
-        try (ExecutorService executorService = Executors.newFixedThreadPool(8);) {
+        try (ExecutorService executorService = Executors.newFixedThreadPool(8)) {
             AtomicInteger failures = new AtomicInteger(0);
 
             Runnable task = () -> IntStream.range(0, 100).forEach(i -> {
@@ -60,6 +60,7 @@ class RedissonTest {
     private void getAndVerify(RedissonClient redissonClient, String id, AtomicInteger failures) {
         redissonClient.reactive().getBucket(id)
                 .get().doOnNext(result -> {
+//                    log.info("Got result: {} with id {}", result, id);
                     if (!id.equals(result)) {
                         failures.getAndIncrement();
                         log.error("Result mismatch!!! Expected {} but got {}", id, result);
